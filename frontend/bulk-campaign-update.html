@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>PriceLink - Bulk Campaign Update</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="layout">
+        <aside class="sidebar">
+            <h2>PriceLink</h2>
+            <a href="dashboard.html">Dashboard</a>
+            <a href="products.html">Products</a>
+            <a href="tag-monitoring.html">Tag Monitoring</a>
+            <a href="bulk-campaign-update.html" class="active">Campaigns</a>
+            <a href="transaction-logs.html">Transaction Logs</a>
+            <a href="settings.html">Settings</a>
+            <a href="index.html" style="margin-top: 50px; color: #fecaca;">Logout</a>
+        </aside>
+
+        <main class="main">
+            <div class="header">
+                <div>
+                    <h1>Bulk Campaign Update</h1>
+                    <p>Apply category-based campaigns with preview, validation, and retry options.</p>
+                </div>
+            </div>
+
+            <div class="panel" style="margin-bottom: 30px;">
+                <div class="form-grid" style="grid-template-columns: repeat(3, 1fr); gap: 20px;">
+                    <div class="input-group">
+                        <label>Category</label>
+                        <select id="categorySelect">
+                            <option value="">Loading categories...</option>
+                        </select>
+                    </div>
+
+                    <div class="input-group">
+                        <label>Campaign Type</label>
+                        <select id="campaignType">
+                            <option value="percentage">Percentage Discount</option>
+                            <option value="fixed">Fixed New Price</option>
+                        </select>
+                    </div>
+
+                    <div class="input-group">
+                        <label>Discount / New Price</label>
+                        <input id="discountInput" type="text" placeholder="e.g. 30 or 499">
+                    </div>
+
+                    <div class="input-group">
+                        <label>Start Time</label>
+                        <input id="startTime" type="datetime-local">
+                    </div>
+
+                    <div class="input-group">
+                        <label>End Time</label>
+                        <input id="endTime" type="datetime-local">
+                    </div>
+
+                    <div class="input-group">
+                        <label>Auto Rollback</label>
+                        <select id="rollbackSelect">
+                            <option>Enabled</option>
+                            <option>Disabled</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div class="panel">
+                <h3 style="margin-bottom: 20px;">Campaign Preview</h3>
+
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Product</th>
+                            <th>Old Price</th>
+                            <th>New Price</th>
+                            <th>Linked Tag</th>
+                            <th>Preview Status</th>
+                        </tr>
+                    </thead>
+
+                    <tbody id="campaign-preview-body">
+                        <tr>
+                            <td colspan="5" style="text-align:center;">Select a category and click Preview.</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <div style="margin-top: 25px; display: flex; gap: 10px;">
+                    <button class="btn" onclick="previewCampaign()" style="background: #e2e8f0; color: #0f172a;">Preview</button>
+                    <button class="btn btn-dark" onclick="applyCampaign()">Apply Campaign</button>
+                    <button class="btn" onclick="cancelCampaign()" style="background: #f1f5f9;">Cancel</button>
+                    <button class="btn btn-warning" onclick="retryFailedTags()" style="margin-left: auto;">Retry Failed Tags</button>
+                </div>
+
+                <div id="campaign-message" class="message" style="display:none; margin-top: 20px; border-left: 4px solid var(--red); background: #fef2f2; padding: 15px; border-radius: 8px;">
+                    <p id="campaign-message-text" style="color: var(--red); font-size: 13px;"></p>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        const API_URL = "http://localhost:5001/api";
+        let allProducts = [];
+
+        document.addEventListener("DOMContentLoaded", () => {
+            loadCategories();
+        });
+
+        function showMessage(message, isError = true) {
+            const box = document.getElementById("campaign-message");
+            const text = document.getElementById("campaign-message-text");
+
+            box.style.display = "block";
+            box.style.borderLeftColor = isError ? "var(--red)" : "var(--secondary)";
+            box.style.background = isError ? "#fef2f2" : "#ecfdf5";
+            text.style.color = isError ? "var(--red)" : "#166534";
+            text.innerText = message;
+        }
+
+        function hideMessage() {
+            document.getElementById("campaign-message").style.display = "none";
+        }
+
+        async function loadCategories() {
+            const categorySelect = document.getElementById("categorySelect");
+
+            try {
+                const response = await fetch(`${API_URL}/categories`);
+
+                if (!response.ok) {
+                    throw new Error("Categories endpoint failed.");
+                }
+
+                const categories = await response.json();
+
+                categorySelect.innerHTML = '<option value="">Select Category...</option>';
+
+                categories.forEach(cat => {
+                    if (cat) {
+                        const option = document.createElement("option");
+                        option.value = cat;
+                        option.textContent = cat;
+                        categorySelect.appendChild(option);
+                    }
+                });
+
+                if (categories.length === 0) {
+                    categorySelect.innerHTML = '<option value="">No category found</option>';
+                }
+
+            } catch (err) {
+                console.error("Category loading error:", err);
+                categorySelect.innerHTML = '<option value="">Category error</option>';
+                showMessage("Categories could not be loaded. Backend may not be running.");
+            }
+        }
+
+        function getCleanNumber(value) {
+            return Number(String(value).replace("%", "").trim());
+        }
+
+        function getProductPrice(product) {
+            if (product.online_price && typeof product.online_price === "object") {
+                return Number(product.online_price.current) || 0;
+            }
+
+            if (typeof product.online_price === "number") {
+                return product.online_price;
+            }
+
+            if (typeof product.price === "number") {
+                return product.price;
+            }
+
+            return 0;
+        }
+
+        function calculateNewPrice(oldPrice, discountRaw) {
+            const campaignType = document.getElementById("campaignType").value;
+            const value = getCleanNumber(discountRaw);
+
+            if (isNaN(value)) return oldPrice;
+
+            if (campaignType === "percentage") {
+                return oldPrice * (1 - value / 100);
+            }
+
+            if (campaignType === "fixed") {
+                return value;
+            }
+
+            return oldPrice;
+        }
+
+        function getProductName(product) {
+            return product.title || product.name || product.productName || "Unknown Product";
+        }
+
+        function getLinkedTag(product) {
+            return product.linkedTagId || product.tagId || product.tag || "N/A";
+        }
+
+        async function previewCampaign() {
+            hideMessage();
+
+            const category = document.getElementById("categorySelect").value;
+            const discountRaw = document.getElementById("discountInput").value;
+            const startTime = document.getElementById("startTime").value;
+            const endTime = document.getElementById("endTime").value;
+            const tbody = document.getElementById("campaign-preview-body");
+
+            if (!category) {
+                showMessage("Please select a category.");
+                return;
+            }
+
+            if (!discountRaw || isNaN(getCleanNumber(discountRaw))) {
+                showMessage("Please enter a valid discount or new price value.");
+                return;
+            }
+
+            if (startTime && endTime && endTime < startTime) {
+                showMessage("End time cannot be earlier than start time.");
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_URL}/products`);
+
+                if (!response.ok) {
+                    throw new Error("Products endpoint failed.");
+                }
+
+                allProducts = await response.json();
+
+                const filteredProducts = allProducts.filter(product => product.category === category);
+
+                tbody.innerHTML = "";
+
+                if (filteredProducts.length === 0) {
+                    tbody.innerHTML = "<tr><td colspan='5' style='text-align:center;'>No products found in this category.</td></tr>";
+                    return;
+                }
+
+                filteredProducts.forEach(product => {
+                    const oldPrice = getProductPrice(product);
+                    const newPrice = Math.max(0, calculateNewPrice(oldPrice, discountRaw));
+
+                    tbody.innerHTML += `
+                        <tr>
+                            <td>${getProductName(product)}</td>
+                            <td>₺${oldPrice.toFixed(2)}</td>
+                            <td style="color: var(--secondary); font-weight: 700;">₺${newPrice.toFixed(2)}</td>
+                            <td>${getLinkedTag(product)}</td>
+                            <td><span class="badge" style="background: #dcfce7; color: #166534;">Ready</span></td>
+                        </tr>
+                    `;
+                });
+
+            } catch (err) {
+                console.error("Preview error:", err);
+                showMessage("Products could not be loaded.");
+            }
+        }
+
+        async function applyCampaign() {
+            hideMessage();
+
+            const category = document.getElementById("categorySelect").value;
+            const discountRaw = document.getElementById("discountInput").value;
+            const campaignType = document.getElementById("campaignType").value;
+            const startTime = document.getElementById("startTime").value;
+            const endTime = document.getElementById("endTime").value;
+            const autoRollback = document.getElementById("rollbackSelect").value === "Enabled";
+
+            const discountValue = getCleanNumber(discountRaw);
+
+            if (!category) {
+                showMessage("Please select a category.");
+                return;
+            }
+
+            if (!discountRaw || isNaN(discountValue)) {
+                showMessage("Please enter a valid discount or new price value.");
+                return;
+            }
+
+            if (startTime && endTime && endTime < startTime) {
+                showMessage("End time cannot be earlier than start time.");
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_URL}/campaigns/apply`, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({
+                        category: category,
+                        campaignType: campaignType,
+                        discount: discountRaw,
+                        discountValue: discountValue,
+                        startTime: startTime || null,
+                        endTime: endTime || null,
+                        autoRollback: autoRollback
+                    })
+                });
+
+                const result = await response.json();
+
+                if (!response.ok || result.success === false) {
+                    throw new Error(result.message || result.error || "Campaign could not be applied.");
+                }
+
+                showMessage(result.message || "Campaign applied successfully.", false);
+               
+
+            } catch (err) {
+                console.error("Apply campaign error:", err);
+                showMessage("Campaign could not be applied. Check backend /api/campaigns/apply route.");
+            }
+        }
+
+        function cancelCampaign() {
+            document.getElementById("categorySelect").value = "";
+            document.getElementById("discountInput").value = "";
+            document.getElementById("startTime").value = "";
+            document.getElementById("endTime").value = "";
+            document.getElementById("campaign-preview-body").innerHTML =
+                '<tr><td colspan="5" style="text-align:center;">Select a category and click Preview.</td></tr>';
+            hideMessage();
+        }
+
+        function retryFailedTags() {
+            showMessage("Retry failed tags request triggered.", false);
+        }
+    </script>
+</body>
+</html>

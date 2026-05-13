@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>PriceLink - Product Management</title>
+
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+
+    <script src="app.js" defer></script>
+</head>
+
+<body>
+    <div class="layout">
+        <aside class="sidebar">
+            <h2>PriceLink</h2>
+
+            <a href="dashboard.html">Dashboard</a>
+            <a href="products.html" class="active">Products</a>
+            <a href="tag-monitoring.html">Tag Monitoring</a>
+            <a href="bulk-campaign-update.html">Campaigns</a>
+            <a href="transaction-logs.html">Transaction Logs</a>
+            <a href="settings.html">Settings</a>
+
+            <a href="index.html" style="margin-top: 50px; color: #fecaca;">Logout</a>
+        </aside>
+
+        <main class="main">
+            <div class="header">
+                <div>
+                    <h1>Product Management</h1>
+                    <p>Manage inventory and digital tag synchronizations.</p>
+                </div>
+
+                <button class="btn btn-dark" onclick="prepareAddProduct()" type="button">
+                    + Add New Product
+                </button>
+            </div>
+
+            <div class="panel" style="margin-bottom: 30px;">
+                <div class="filters" style="display: flex; gap: 12px; margin-bottom: 20px;">
+                    <input
+                        type="text"
+                        id="search-input"
+                        placeholder="Search products..."
+                        style="flex: 3;"
+                    >
+
+                    <select id="category-filter" style="flex: 1;">
+                        <option value="all">All Categories</option>
+                    </select>
+
+                    <button
+                        class="btn btn-dark"
+                        style="background: #e2e8f0; color: #0f172a;"
+                        type="button"
+                        onclick="applyFilters()"
+                    >
+                        Filter
+                    </button>
+                </div>
+
+                <table>
+                    <thead>
+                        <tr>
+                            <th>SKU / Barcode</th>
+                            <th>Product Name</th>
+                            <th>Category</th>
+                            <th>Price</th>
+                            <th>Location</th>
+                            <th>Tag ID</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+
+                    <tbody id="product-table-body">
+                        <tr>
+                            <td colspan="7">Loading products...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="panel">
+                <h3 id="product-form-title" style="margin-bottom: 20px; font-size: 18px;">
+                    Add / Edit Product Details
+                </h3>
+
+                <div class="form-grid">
+                    <div class="input-group">
+                        <label>Product Name</label>
+                        <input
+                            type="text"
+                            id="p-name"
+                            placeholder="e.g. Wool Coat"
+                            data-current-id=""
+                        >
+                    </div>
+
+                    <div class="input-group">
+                        <label>SKU / Barcode</label>
+                        <input
+                            type="text"
+                            id="p-sku"
+                            placeholder="e.g. HM-W-999"
+                        >
+                    </div>
+
+                    <div class="input-group">
+                        <label>Price (₺)</label>
+                        <input
+                            type="number"
+                            id="p-price"
+                            placeholder="0.00"
+                        >
+                    </div>
+
+                    <div class="input-group">
+                        <label>Linked Tag ID</label>
+                        <input
+                            type="text"
+                            id="p-tag"
+                            placeholder="e.g. TAG-31"
+                        >
+                    </div>
+
+                    <div class="input-group">
+                        <label>Category</label>
+                        <input
+                            type="text"
+                            id="p-cat"
+                            placeholder="e.g. Apparel"
+                        >
+                    </div>
+
+                    <div class="input-group">
+                        <label>Store Location</label>
+                        <input
+                            type="text"
+                            id="p-loc"
+                            placeholder="e.g. Store"
+                        >
+                    </div>
+                </div>
+
+                <div style="margin-top: 30px; text-align: right;">
+                    <button
+                        class="btn btn-dark"
+                        id="save-product-btn"
+                        onclick="handleSaveChanges()"
+                        style="min-width: 180px; height: 45px;"
+                        type="button"
+                    >
+                        Save Changes
+                    </button>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        function prepareAddProduct() {
+            resetForm();
+
+            document.getElementById("product-form-title").innerText = "Add New Product";
+            document.getElementById("save-product-btn").innerText = "Add Product";
+
+            document.getElementById("p-name").scrollIntoView({
+                behavior: "smooth",
+                block: "center"
+            });
+        }
+    </script>
+</body>
+</html>

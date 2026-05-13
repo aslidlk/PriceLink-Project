@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <title>PriceLink - Giriş</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <script src="app.js" defer></script>
+</head>
+<script>
+
+async function handleLogin(event) {
+    event.preventDefault();
+    const user = document.getElementById('username').value;
+    const pass = document.getElementById('password').value;
+    const errorDiv = document.getElementById('login-error');
+
+    try {
+        const response = await fetch("http://localhost:5001/api/auth/login", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ username: user, password: pass })
+        });
+        const data = await response.json();
+        if (data.success) {
+            localStorage.setItem("token", data.token);
+            window.location.href = "dashboard.html";
+        } else {
+            errorDiv.innerText = data.message;
+            errorDiv.style.display = 'block';
+        }
+    } catch (err) {
+        console.error("Hata:", err);
+        alert("Sunucuya ulaşılamıyor!");
+    }
+}
+
+
+
+</script>
+<body class="login-body">
+  
+  <div class="login-card">
+    <div class="brand">PriceLink</div>
+    <div class="subtitle">Yönetim Paneli Girişi</div>
+    
+    <form onsubmit="handleLogin(event)">
+      <label for="username">Kullanıcı Adı</label>
+      <input type="text" id="username" placeholder="admin" required autocomplete="username">
+      
+      <label for="password">Şifre</label>
+      <input type="password" id="password" placeholder="••••••••" required autocomplete="current-password">
+      
+      <button class="btn btn-dark" type="submit" style="width: 100%; cursor: pointer;">Giriş Yap</button>
+      
+      <div id="login-error" class="error" style="display: none;">Hatalı kullanıcı adı veya şifre.</div>
+    </form>
+  </div>
+
+</body>
+</html>

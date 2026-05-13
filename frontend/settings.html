@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>PriceLink - Settings</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="layout">
+        <aside class="sidebar">
+            <h2>PriceLink</h2>
+            <a href="dashboard.html">Dashboard</a>
+            <a href="products.html">Products</a>
+            <a href="tag-monitoring.html">Tag Monitoring</a>
+            <a href="bulk-campaign-update.html">Campaigns</a>
+            <a href="transaction-logs.html">Transaction Logs</a>
+            <a href="settings.html" class="active">Settings</a>
+            <a href="index.html" style="margin-top: 50px; color: #fecaca;">Logout</a>
+        </aside>
+
+        <main class="main">
+            <div class="header">
+                <div>
+                    <h1>Settings</h1>
+                    <p>Manage system preferences, display units, and notification thresholds.</p>
+                </div>
+             <button class="btn btn-dark" onclick="saveSettings()">Save All Changes</button>
+            </div>
+
+            <div class="panel" style="margin-bottom: 25px;">
+                <h3 style="margin-bottom: 20px;">System Preferences</h3>
+                <div class="form-grid">
+                    <div class="input-group">
+                        <label>Default Currency</label>
+                       <select id="currency">
+  <option value="TRY">TRY - Turkish Lira (₺)</option>
+  <option value="USD">USD - US Dollar ($)</option>
+  <option value="EUR">EUR - Euro (€)</option>
+</select>
+                    </div>
+                    <div class="input-group">
+                        <label>Low Battery Threshold (%)</label>
+                        <input id="lowBatteryThreshold" type="number" value="30" min="5" max="50">
+                    </div>
+                    <div class="input-group">
+                        <label>Max Retry Attempts</label>
+                       <input id="maxRetryAttempts" type="number" value="3" min="1" max="10">
+                    </div>
+                </div>
+            </div>
+
+            <div class="panel">
+                <h3 style="margin-bottom: 20px;">Communication & Display</h3>
+                <div class="form-grid">
+                    <div class="input-group">
+                        <label>MQTT Update Interval (Seconds)</label>
+                        <input id="mqttUpdateInterval" type="number" value="30">
+                    </div>
+                    <div class="input-group">
+                        <label>Date Format</label>
+                        <select id="dateFormat">
+  <option value="YYYY-MM-DD">YYYY-MM-DD</option>
+  <option value="DD/MM/YYYY">DD/MM/YYYY</option>
+</select>
+                    </div>
+                    <div class="input-group">
+                        <label>Timezone</label>
+                       <select id="timezone">
+  <option value="Europe/Istanbul">(GMT+03:00) Istanbul</option>
+  <option value="Europe/London">(GMT+00:00) London</option>
+</select>
+                    </div>
+                </div>
+                
+                <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #fee2e2;">
+                    <h3 style="color: var(--red); font-size: 16px; margin-bottom: 10px;">Danger Zone</h3>
+                    <p style="font-size: 13px; color: var(--muted); margin-bottom: 15px;">Caution: These actions cannot be undone.</p>
+                 <button class="btn" onclick="alert('System pairs reset successfully.')" style="background: #fee2e2; color: #b91c1c; border: 1px solid #f87171;">
+  Reset All System Pairs
+</button>
+                </div>
+            </div>
+        </main>
+    </div>
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    const savedSettings = JSON.parse(localStorage.getItem("settings"));
+
+    if (savedSettings) {
+      document.getElementById("currency").value = savedSettings.currency;
+      document.getElementById("lowBatteryThreshold").value = savedSettings.lowBatteryThreshold;
+      document.getElementById("maxRetryAttempts").value = savedSettings.maxRetryAttempts;
+      document.getElementById("mqttUpdateInterval").value = savedSettings.mqttUpdateInterval;
+      document.getElementById("dateFormat").value = savedSettings.dateFormat;
+      document.getElementById("timezone").value = savedSettings.timezone;
+    }
+  });
+
+  function saveSettings() {
+    const settings = {
+      currency: document.getElementById("currency").value,
+      lowBatteryThreshold: document.getElementById("lowBatteryThreshold").value,
+      maxRetryAttempts: document.getElementById("maxRetryAttempts").value,
+      mqttUpdateInterval: document.getElementById("mqttUpdateInterval").value,
+      dateFormat: document.getElementById("dateFormat").value,
+      timezone: document.getElementById("timezone").value
+    };
+
+    localStorage.setItem("settings", JSON.stringify(settings));
+
+    alert("Settings saved successfully.");
+  }
+</script>
+</body>
+</html>

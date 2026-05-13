@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>PriceLink - Transaction Logs</title>
+
+    <link rel="stylesheet" href="style.css">
+
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap"
+        rel="stylesheet"
+    >
+</head>
+
+<body>
+    <div class="layout">
+        <aside class="sidebar">
+            <h2>PriceLink</h2>
+
+            <a href="dashboard.html">Dashboard</a>
+            <a href="products.html">Products</a>
+            <a href="tag-monitoring.html">Tag Monitoring</a>
+            <a href="bulk-campaign-update.html">Campaigns</a>
+            <a href="transaction-logs.html" class="active">Transaction Logs</a>
+            <a href="settings.html">Settings</a>
+
+            <a
+                href="index.html"
+                style="margin-top: 50px; color: #fecaca;"
+            >
+                Logout
+            </a>
+        </aside>
+
+        <main class="main">
+            <div class="header">
+                <div>
+                    <h1>Transaction Logs</h1>
+                    <p>
+                        Trace all actions with username, timestamp,
+                        and state changes.
+                    </p>
+                </div>
+
+                <button class="btn btn-dark" type="button">
+                    Export to CSV
+                </button>
+            </div>
+
+            <div class="panel">
+                <div
+                    class="filters"
+                    style="
+                        display: grid;
+                        grid-template-columns: 2fr 1.5fr 1fr 1fr;
+                        gap: 15px;
+                        margin-bottom: 25px;
+                    "
+                >
+                    <input
+                        type="text"
+                        placeholder="Search by username or action..."
+                    >
+
+                    <select>
+                        <option>All Action Types</option>
+                        <option>Bulk Campaign Update</option>
+                        <option>Tag Reassignment</option>
+                        <option>Price Update</option>
+                        <option>System Retry</option>
+                    </select>
+
+                    <input type="date" placeholder="Start Date">
+                    <input type="date" placeholder="End Date">
+                </div>
+
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Username</th>
+                            <th>Action Type</th>
+                            <th>Old State</th>
+                            <th>New State</th>
+                            <th>Timestamp</th>
+                        </tr>
+                    </thead>
+
+                    <tbody id="logs-table-body">
+                        <tr>
+                            <td><strong>berna.admin</strong></td>
+                            <td>Bulk Campaign Update</td>
+                            <td>Winter Jackets: original prices</td>
+                            <td>Winter Jackets: 30% discount applied</td>
+                            <td>2026-03-08 10:41</td>
+                        </tr>
+
+                        <tr>
+                            <td><strong>berna.admin</strong></td>
+                            <td>Tag Reassignment</td>
+                            <td>TAG-1042 → SKU-8831</td>
+                            <td>TAG-1042 → SKU-9218</td>
+                            <td>2026-03-08 09:58</td>
+                        </tr>
+
+                        <tr>
+                            <td><strong>system</strong></td>
+                            <td>Retry Update</td>
+                            <td>TAG-1044 disconnected</td>
+                            <td>Pending update queued</td>
+                            <td>2026-03-08 09:56</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </main>
+    </div>
+</body>
+</html>
