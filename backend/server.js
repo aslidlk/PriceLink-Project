@@ -233,9 +233,13 @@ app.post("/api/products", async (req, res) => {
    PRODUCTS - UPDATE + MQTT
 ======================= */
 app.put("/api/products/:id", async (req, res) => {
-    console.log("📦 UPDATE BODY:", req.body);
+  console.log("📦 UPDATE BODY:", req.body);
+
+  const { id } = req.params;
+
   const {
     price,
+    online_price,
     linkedTagId,
     title,
     product_id,
@@ -244,96 +248,106 @@ app.put("/api/products/:id", async (req, res) => {
     location
   } = req.body;
 
-  const { id } = req.params;
+  const rawPrice =
+    price !== undefined
+      ? price
+      : online_price !== undefined
+      ? online_price
+      : req.body.currentPrice;
 
-  console.log(`📥 Güncelleme isteği: ID=${id}, Fiyat=${price}, Tag=${linkedTagId}`);
+  let numericPrice;
+
+  if (rawPrice && typeof rawPrice === "object") {
+    numericPrice = Number(rawPrice.current ?? rawPrice.price ?? rawPrice.value);
+  } else {
+    numericPrice = Number(rawPrice);
+  }
+
+  if (Number.isNaN(numericPrice) || numericPrice < 0) {
+    return res.status(400).json({
+      success: false,
+      message: "Valid price is required."
+    });
+  }
 
   try {
-    const numericPrice = Number(price) || 0;
+    const filter = mongoose.Types.ObjectId.isValid(id)
+      ? { _id: id }
+      : { product_id: id };
 
-    let updatedProduct;
+    const existingProduct = await Product.findOne(filter);
 
-    if (id === "test_id") {
-      updatedProduct = await Product.findOneAndUpdate(
-        { title: "ESP32 Test Device" },
-        {
-          $set: {
-            title: "ESP32 Test Device",
-            product_id: "ESP32_TEST",
-            "online_price.current": numericPrice,
-            "online_price.currency": "TRY",
-            linkedTagId: linkedTagId || null
-          },
-          $push: {
-            price_history: {
-              price: numericPrice,
-              date: new Date()
-            }
-          }
-        },
-        {
-          new: true,
-          upsert: true,
-          strict: false,
-          runValidators: true
-        }
-      );
+    if (!existingProduct) {
+      console.log("❌ Ürün bulunamadı:", id);
 
-      console.log("📡 TEST MODU: DB kaydedildi & sinyal hazır.");
-    } else {
-      const updateData = {
-        "online_price.current": numericPrice,
-        linkedTagId: linkedTagId || null
-      };
-
-      if (title !== undefined) updateData.title = title;
-      if (product_id !== undefined) updateData.product_id = product_id;
-      if (category !== undefined) updateData.category = category;
-      if (department !== undefined) updateData.department = department;
-
-      if (location !== undefined) {
-        updateData.ankara_physical_stores = location ? [location] : ["Store"];
-      }
-
-      updatedProduct = await Product.findByIdAndUpdate(
-        id,
-        {
-          $set: updateData,
-          $push: {
-            price_history: {
-              price: numericPrice,
-              date: new Date()
-            }
-          }
-        },
-        {
-          new: true,
-          runValidators: true
-        }
-      );
-    }
-
-    if (!updatedProduct) {
       return res.status(404).json({
         success: false,
         message: "Ürün bulunamadı!"
       });
     }
 
-    if (linkedTagId) {
-      const topic = `pricelink/tag/${linkedTagId}`;
+    let oldPrice = existingProduct.online_price;
+
+    if (oldPrice && typeof oldPrice === "object") {
+      oldPrice = oldPrice.current ?? oldPrice.price ?? oldPrice.value;
+    }
+
+    oldPrice = Number(oldPrice);
+
+    const updateData = {
+      "online_price.current": numericPrice,
+      "online_price.currency": "TRY"
+    };
+
+    if (linkedTagId !== undefined) updateData.linkedTagId = linkedTagId || null;
+    if (title !== undefined) updateData.title = title;
+    if (product_id !== undefined) updateData.product_id = product_id;
+    if (category !== undefined) updateData.category = category;
+    if (department !== undefined) updateData.department = department;
+
+    if (location !== undefined) {
+      updateData.ankara_physical_stores = location ? [location] : ["Store"];
+    }
+
+    const updatedProduct = await Product.findOneAndUpdate(
+      filter,
+      {
+        $set: updateData,
+        $push: {
+          price_history: {
+            oldPrice: Number.isNaN(oldPrice) ? null : oldPrice,
+            price: numericPrice,
+            date: new Date(),
+            source: "manual_update"
+          }
+        }
+      },
+      {
+        new: true,
+        runValidators: true
+      }
+    );
+
+    console.log(
+      `✅ Product price updated: ${updatedProduct.title} | Old: ₺${
+        Number.isNaN(oldPrice) ? "unknown" : oldPrice
+      } -> New: ₺${numericPrice}`
+    );
+
+    if (updatedProduct.linkedTagId) {
+      const topic = `pricelink/tag/${updatedProduct.linkedTagId}`;
 
       mqttClient.publish(topic, numericPrice.toString(), {
         qos: 1,
         retain: true
       });
 
-      console.log(`🚀 Sinyal gönderildi: ${topic} -> ₺${numericPrice}`);
+      console.log(`🚀 MQTT signal sent: ${topic} -> ₺${numericPrice}`);
     }
 
     res.json({
       success: true,
-      message: "Product updated successfully.",
+      message: "Product price updated successfully.",
       data: updatedProduct
     });
   } catch (err) {
@@ -345,7 +359,6 @@ app.put("/api/products/:id", async (req, res) => {
     });
   }
 });
-
 /* =======================
    PRODUCTS - DELETE
 ======================= */
