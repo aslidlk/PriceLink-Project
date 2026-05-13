@@ -233,6 +233,7 @@ app.post("/api/products", async (req, res) => {
    PRODUCTS - UPDATE + MQTT
 ======================= */
 app.put("/api/products/:id", async (req, res) => {
+    console.log("📦 UPDATE BODY:", req.body);
   const {
     price,
     linkedTagId,
@@ -396,7 +397,7 @@ app.post("/api/campaigns/apply", async (req, res) => {
       });
     }
 
-    const products = await Product.find({ category });
+    const products = await Product.find({ category }).lean();
 
     if (!products.length) {
       return res.status(404).json({
@@ -408,27 +409,33 @@ app.post("/api/campaigns/apply", async (req, res) => {
     let updatedCount = 0;
 
     function extractPrice(product) {
-      let rawPrice = null;
+      let rawPrice = product.online_price;
 
-      if (product.online_price && typeof product.online_price === "object") {
-        rawPrice = product.online_price.current;
-      } else if (product.online_price !== undefined) {
-        rawPrice = product.online_price;
-      } else if (product.price !== undefined) {
-        rawPrice = product.price;
+      if (rawPrice && typeof rawPrice === "object") {
+        rawPrice = rawPrice.current ?? rawPrice.price ?? rawPrice.value;
+      }
+
+      if (rawPrice === undefined || rawPrice === null) {
+        rawPrice = product.price ?? product.currentPrice ?? product.originalPrice;
       }
 
       if (typeof rawPrice === "string") {
         rawPrice = rawPrice.replace(/[^\d.-]/g, "");
       }
 
-      return Number(rawPrice);
+      const numericPrice = Number(rawPrice);
+
+      if (Number.isNaN(numericPrice) || numericPrice <= 0) {
+        return null;
+      }
+
+      return numericPrice;
     }
 
     for (const product of products) {
       const oldPrice = extractPrice(product);
 
-      if (isNaN(oldPrice) || oldPrice <= 0) {
+      if (!oldPrice) {
         console.log(`❌ Price could not be read for: ${product.title}`);
         continue;
       }
@@ -436,7 +443,7 @@ app.post("/api/campaigns/apply", async (req, res) => {
       let newPrice;
 
       if (campaignType === "percentage") {
-        newPrice = oldPrice * (1 - value / 100);
+        newPrice = oldPrice - oldPrice * (value / 100);
       } else if (campaignType === "fixed") {
         newPrice = value;
       } else {
@@ -449,8 +456,7 @@ app.post("/api/campaigns/apply", async (req, res) => {
         { _id: product._id },
         {
           $set: {
-            "online_price.current": newPrice,
-            "online_price.currency": "TRY"
+            online_price: newPrice
           },
           $push: {
             price_history: {
@@ -466,6 +472,9 @@ app.post("/api/campaigns/apply", async (req, res) => {
       );
 
       updatedCount++;
+      console.log(
+  `✅ Campaign updated: ${product.title} | Old: ₺${oldPrice} -> New: ₺${newPrice}`
+);
 
       if (product.linkedTagId) {
         mqttClient.publish(
