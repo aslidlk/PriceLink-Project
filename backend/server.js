@@ -55,6 +55,46 @@ mqttClient.on("error", (err) => {
 });
 
 /* =======================
+   HELPER FUNCTIONS
+======================= */
+function extractPrice(product) {
+  let rawPrice = product.online_price;
+
+  if (rawPrice && typeof rawPrice === "object") {
+    rawPrice = rawPrice.current ?? rawPrice.price ?? rawPrice.value;
+  }
+
+  if (rawPrice === undefined || rawPrice === null) {
+    rawPrice = product.price ?? product.currentPrice ?? product.originalPrice;
+  }
+
+  if (typeof rawPrice === "string") {
+    rawPrice = rawPrice.replace(/[^\d.-]/g, "");
+  }
+
+  const numericPrice = Number(rawPrice);
+
+  if (Number.isNaN(numericPrice)) {
+    return null;
+  }
+
+  return numericPrice;
+}
+
+function buildPriceUpdateData(product, newPrice) {
+  if (product.online_price && typeof product.online_price === "object") {
+    return {
+      "online_price.current": newPrice,
+      "online_price.currency": product.online_price.currency || "TRY"
+    };
+  }
+
+  return {
+    online_price: newPrice
+  };
+}
+
+/* =======================
    BASIC ROUTE
 ======================= */
 app.get("/", (req, res) => {
@@ -89,8 +129,9 @@ app.post("/api/auth/login", (req, res) => {
 app.get("/api/dashboard/stats", async (req, res) => {
   try {
     const totalProducts = await Product.countDocuments();
-
-const activeTags = await Product.countDocuments();
+    const activeTags = await Product.countDocuments({
+      linkedTagId: { $exists: true, $ne: null, $ne: "" }
+    });
 
     const categories = await Product.distinct("category");
 
@@ -286,18 +327,9 @@ app.put("/api/products/:id", async (req, res) => {
       });
     }
 
-    let oldPrice = existingProduct.online_price;
+    const oldPrice = extractPrice(existingProduct);
 
-    if (oldPrice && typeof oldPrice === "object") {
-      oldPrice = oldPrice.current ?? oldPrice.price ?? oldPrice.value;
-    }
-
-    oldPrice = Number(oldPrice);
-
-    const updateData = {
-      "online_price.current": numericPrice,
-      "online_price.currency": "TRY"
-    };
+    const updateData = buildPriceUpdateData(existingProduct, numericPrice);
 
     if (linkedTagId !== undefined) updateData.linkedTagId = linkedTagId || null;
     if (title !== undefined) updateData.title = title;
@@ -315,7 +347,7 @@ app.put("/api/products/:id", async (req, res) => {
         $set: updateData,
         $push: {
           price_history: {
-            oldPrice: Number.isNaN(oldPrice) ? null : oldPrice,
+            oldPrice: oldPrice,
             price: numericPrice,
             date: new Date(),
             source: "manual_update"
@@ -330,7 +362,7 @@ app.put("/api/products/:id", async (req, res) => {
 
     console.log(
       `✅ Product price updated: ${updatedProduct.title} | Old: ₺${
-        Number.isNaN(oldPrice) ? "unknown" : oldPrice
+        oldPrice === null ? "unknown" : oldPrice
       } -> New: ₺${numericPrice}`
     );
 
@@ -359,12 +391,17 @@ app.put("/api/products/:id", async (req, res) => {
     });
   }
 });
+
 /* =======================
    PRODUCTS - DELETE
 ======================= */
 app.delete("/api/products/:id", async (req, res) => {
   try {
-    const deletedProduct = await Product.findByIdAndDelete(req.params.id);
+    const filter = mongoose.Types.ObjectId.isValid(req.params.id)
+      ? { _id: req.params.id }
+      : { product_id: req.params.id };
+
+    const deletedProduct = await Product.findOneAndDelete(filter);
 
     if (!deletedProduct) {
       return res.status(404).json({
@@ -403,7 +440,7 @@ app.post("/api/campaigns/apply", async (req, res) => {
       });
     }
 
-    if (isNaN(value)) {
+    if (Number.isNaN(value)) {
       return res.status(400).json({
         success: false,
         message: "Discount value must be a number."
@@ -421,34 +458,10 @@ app.post("/api/campaigns/apply", async (req, res) => {
 
     let updatedCount = 0;
 
-    function extractPrice(product) {
-      let rawPrice = product.online_price;
-
-      if (rawPrice && typeof rawPrice === "object") {
-        rawPrice = rawPrice.current ?? rawPrice.price ?? rawPrice.value;
-      }
-
-      if (rawPrice === undefined || rawPrice === null) {
-        rawPrice = product.price ?? product.currentPrice ?? product.originalPrice;
-      }
-
-      if (typeof rawPrice === "string") {
-        rawPrice = rawPrice.replace(/[^\d.-]/g, "");
-      }
-
-      const numericPrice = Number(rawPrice);
-
-      if (Number.isNaN(numericPrice) || numericPrice <= 0) {
-        return null;
-      }
-
-      return numericPrice;
-    }
-
     for (const product of products) {
       const oldPrice = extractPrice(product);
 
-      if (!oldPrice) {
+      if (oldPrice === null || oldPrice <= 0) {
         console.log(`❌ Price could not be read for: ${product.title}`);
         continue;
       }
@@ -465,12 +478,12 @@ app.post("/api/campaigns/apply", async (req, res) => {
 
       newPrice = Math.max(0, Number(newPrice.toFixed(2)));
 
+      const setData = buildPriceUpdateData(product, newPrice);
+
       await Product.updateOne(
         { _id: product._id },
         {
-          $set: {
-            online_price: newPrice
-          },
+          $set: setData,
           $push: {
             price_history: {
               price: newPrice,
@@ -485,9 +498,10 @@ app.post("/api/campaigns/apply", async (req, res) => {
       );
 
       updatedCount++;
+
       console.log(
-  `✅ Campaign updated: ${product.title} | Old: ₺${oldPrice} -> New: ₺${newPrice}`
-);
+        `✅ Campaign updated: ${product.title} | Old: ₺${oldPrice} -> New: ₺${newPrice}`
+      );
 
       if (product.linkedTagId) {
         mqttClient.publish(
@@ -495,6 +509,8 @@ app.post("/api/campaigns/apply", async (req, res) => {
           String(newPrice),
           { qos: 1, retain: true }
         );
+
+        console.log(`🚀 Campaign MQTT sent: pricelink/tag/${product.linkedTagId} -> ₺${newPrice}`);
       }
     }
 
